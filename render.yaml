@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: phoneage-ws
+    env: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: node server/ws-server.mjs
+    autoDeploy: true
+    healthCheckPath: /healthz
+    envVars:
+      - key: WS_HEARTBEAT_MS
+        value: "30000"
+      - key: WS_ALLOWED_ORIGINS
+        value: "https://kaospan.github.io"

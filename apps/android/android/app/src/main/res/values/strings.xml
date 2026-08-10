@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Phoneage</string>
+    <string name="title_activity_main">Phoneage</string>
+    <string name="package_name">io.kaospan.phoneage</string>
+    <string name="custom_url_scheme">io.kaospan.phoneage</string>
+</resources>

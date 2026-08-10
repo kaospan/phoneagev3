@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      GitHub Pages doesn't support custom HTTP response headers, so this is the only lever
+      available to discourage caching the HTML shell itself (best-effort — a real Cache-Control
+      response header, which we don't control here, still wins in most browsers). The hashed JS/
+      CSS bundles referenced below are fine to cache hard, since a new deploy gives them new
+      filenames; it's specifically this HTML document going stale that would keep serving an old
+      deploy's asset references. See main.tsx's active version check for the real fix.
+    -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="build-id" content="%VITE_BUILD_ID%" />
+    <title>Phoneage</title>
+    <link rel="icon" href="%BASE_URL%favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="%BASE_URL%favicon.svg" />
+    <meta name="description" content="A mobile puzzle game" />
+
+    <meta property="og:title" content="Phoneage" />
+    <meta property="og:description" content="A mobile puzzle game" />
+    <meta property="og:type" content="website" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const redirect = params.get("redirect");
+        // Only allow same-origin relative paths (must start with a single "/",
+        // not "//" or "/\" which browsers treat as protocol-relative URLs).
+        const isSafeRelativePath = redirect
+          && redirect.startsWith("/")
+          && !redirect.startsWith("//")
+          && !redirect.startsWith("/\\");
+        if (isSafeRelativePath) {
+          params.delete("redirect");
+          const newSearch = params.toString();
+          const search = newSearch ? `?${newSearch}` : "";
+          window.history.replaceState(null, "", redirect + search + window.location.hash);
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
