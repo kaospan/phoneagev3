@@ -19,7 +19,7 @@ interface Game3DProps {
   selectorPos?: { x: number; y: number } | null;
   cameraOffset?: { x: number; z: number };
   zoomFactor?: number;
-  viewMode?: '2d' | '3d' | 'fps';
+  viewMode?: '2d' | '3d';
   theme?: ColorTheme;
   players: Array<{ id: string; pos: { x: number; y: number }; facing: PlayerFacing; color: string; isLocal?: boolean; teleportWarpTicksLeft?: number }>;
   localPlayerId?: string;
@@ -40,22 +40,6 @@ const playerRotationByFacing: Record<PlayerFacing, number> = {
   down: 0,
   left: -Math.PI / 2,
 };
-
-const worldForwardByFacing: Record<PlayerFacing, { x: number; z: number }> = {
-  up: { x: 0, z: -1 },
-  right: { x: 1, z: 0 },
-  down: { x: 0, z: 1 },
-  left: { x: -1, z: 0 },
-};
-
-const FPS_CHASE_DISTANCE = 2.6;
-const FPS_LOOK_DISTANCE = 1.4;
-const FPS_LOOK_HEIGHT = 0.42;
-const FPS_CHASE_ANGLE_DEG = 45;
-const FPS_CHASE_HEIGHT =
-  FPS_LOOK_HEIGHT +
-  Math.tan((FPS_CHASE_ANGLE_DEG * Math.PI) / 180) * (FPS_CHASE_DISTANCE + FPS_LOOK_DISTANCE);
-const FPS_ZOOM_BASELINE_FACTOR = 0.66;
 
 const smoothstep = (edge0: number, edge1: number, value: number) => {
   const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
@@ -1802,7 +1786,6 @@ const CameraController = ({
   gridWidth,
   gridHeight,
   contentBounds,
-  playerFacing,
   cameraOffset,
   zoomFactor = 0.93,
   viewMode = '3d'
@@ -1822,16 +1805,12 @@ const CameraController = ({
     width: number;
     height: number;
   };
-  playerFacing: PlayerFacing;
   cameraOffset?: { x: number; z: number };
   zoomFactor?: number;
-  viewMode?: '2d' | '3d' | 'fps';
+  viewMode?: '2d' | '3d';
 }) => {
   const { camera } = useThree();
   const targetRef = useRef(new THREE.Vector3());
-  const fpsCameraTargetRef = useRef(new THREE.Vector3());
-  const fpsLookCurrentRef = useRef(new THREE.Vector3());
-  const fpsLookTargetRef = useRef(new THREE.Vector3());
   const followLookTargetRef = useRef(new THREE.Vector3());
   const followLookCurrentRef = useRef(new THREE.Vector3());
   const followLookVelRef = useRef(new THREE.Vector3());
@@ -1847,39 +1826,14 @@ const CameraController = ({
     followLookVelRef.current.set(0, 0, 0);
   }, [viewMode, zoomFactor]);
 
-  useEffect(() => {
-    if (viewMode !== 'fps') return;
-    const playerX = playerPos.x + offsetX;
-    const playerZ = playerPos.y + offsetZ;
-    const forward = worldForwardByFacing[playerFacing];
-    const fpsZoomScale = zoomFactor / FPS_ZOOM_BASELINE_FACTOR;
-    const chaseDistance = FPS_CHASE_DISTANCE * fpsZoomScale;
-    const lookDistance = FPS_LOOK_DISTANCE * fpsZoomScale;
-    const lookHeight = FPS_LOOK_HEIGHT * fpsZoomScale;
-    const chaseHeight = FPS_CHASE_HEIGHT * fpsZoomScale;
-
-    fpsCameraTargetRef.current.set(
-      playerX - forward.x * chaseDistance,
-      chaseHeight,
-      playerZ - forward.z * chaseDistance
-    );
-    fpsLookTargetRef.current.set(
-      playerX + forward.x * lookDistance,
-      lookHeight,
-      playerZ + forward.z * lookDistance
-    );
-    fpsLookCurrentRef.current.copy(fpsLookTargetRef.current);
-  }, [playerFacing, playerPos, offsetX, offsetZ, viewMode, zoomFactor]);
-
     useFrame((_, delta) => {
     // Camera settings based on view mode
     const is2D = viewMode === '2d';
-    const isFps = viewMode === 'fps';
     const baseCameraHeight = is2D ? 24 : 18;
     const baseCameraDistance = is2D ? 0.5 : 0;
     const cameraHeight = baseCameraHeight * zoomFactor;
     const cameraDistance = baseCameraDistance * zoomFactor;
-    const fov = isFps ? 72 : is2D ? 42 : 50;
+    const fov = is2D ? 42 : 50;
 
     // Calculate if the entire map fits in view at current zoom
     const perspectiveCamera = camera as THREE.PerspectiveCamera;
@@ -1892,36 +1846,6 @@ const CameraController = ({
 
     const playerX = playerPos.x + offsetX;
     const playerZ = playerPos.y + offsetZ;
-
-    if (isFps) {
-      const forward = worldForwardByFacing[playerFacing];
-      const fpsZoomScale = zoomFactor / FPS_ZOOM_BASELINE_FACTOR;
-      const chaseDistance = FPS_CHASE_DISTANCE * fpsZoomScale;
-      const lookDistance = FPS_LOOK_DISTANCE * fpsZoomScale;
-      const lookHeight = FPS_LOOK_HEIGHT * fpsZoomScale;
-      const chaseHeight = FPS_CHASE_HEIGHT * fpsZoomScale;
-      const targetPosition = new THREE.Vector3(
-        playerX - forward.x * chaseDistance,
-        chaseHeight,
-        playerZ - forward.z * chaseDistance
-      );
-      const lookTarget = new THREE.Vector3(
-        playerX + forward.x * lookDistance,
-        lookHeight,
-        playerZ + forward.z * lookDistance
-      );
-
-      const positionAlpha = 1 - Math.exp(-delta * 6);
-      const lookAlpha = 1 - Math.exp(-delta * 7.5);
-
-      fpsCameraTargetRef.current.copy(targetPosition);
-      fpsLookTargetRef.current.copy(lookTarget);
-
-      camera.position.lerp(fpsCameraTargetRef.current, positionAlpha);
-      fpsLookCurrentRef.current.lerp(fpsLookTargetRef.current, lookAlpha);
-      camera.lookAt(fpsLookCurrentRef.current);
-      return;
-    }
 
     const fovRad = fov * (Math.PI / 180);
     const viewHeight = 2 * Math.tan(fovRad / 2) * cameraHeight;
@@ -2024,17 +1948,14 @@ export const Game3D = ({
   const hasSelection = selectedArrow !== null && selectedArrow !== undefined;
   const focusPlayer = players.find((p) => p.id === localPlayerId) ?? players[0];
   const focusPlayerPos = focusPlayer?.pos ?? { x: 0, y: 0 };
-  const focusPlayerFacing = focusPlayer?.facing ?? 'down';
   const goalCaves = useMemo(() => findGoalCaves(grid, cavePos), [grid, cavePos]);
 
   // Camera settings based on view mode
   const is2D = viewMode === '2d';
-  const isFps = viewMode === 'fps';
-  const fpsZoomScale = zoomFactor / FPS_ZOOM_BASELINE_FACTOR;
   // Make 3D view more top-down and clearer
-  const initialCameraY = isFps ? FPS_CHASE_HEIGHT * fpsZoomScale : (is2D ? 24 : 18) * zoomFactor;
-  const initialCameraZ = isFps ? FPS_CHASE_DISTANCE * fpsZoomScale : (is2D ? 0.5 : 6) * zoomFactor;
-  const fov = isFps ? 72 : is2D ? 42 : 50;
+  const initialCameraY = (is2D ? 24 : 18) * zoomFactor;
+  const initialCameraZ = (is2D ? 0.5 : 6) * zoomFactor;
+  const fov = is2D ? 42 : 50;
 
   const noiseTexture = useMemo(() => {
     if (typeof document === 'undefined') return null;
@@ -2397,7 +2318,6 @@ export const Game3D = ({
           gridWidth={gridWidth}
           gridHeight={gridHeight}
           contentBounds={contentBounds}
-          playerFacing={focusPlayerFacing}
           cameraOffset={cameraOffset}
           zoomFactor={zoomFactor}
           viewMode={viewMode}

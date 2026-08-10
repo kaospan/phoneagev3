@@ -12,8 +12,10 @@ import { getAllLevels, normalizeHud3DSettings, themes, manualFallbackById } from
 import { getMusicEnabled, setMusicEnabled, MUSIC_ENABLED_UPDATED_EVENT } from "@/lib/musicPrefs";
 import phoneageMusicUrl from "@/assets/phoneage.mp3";
 import { Game3D } from "./Game3D";
+import { GameFPS } from "./GameFPS";
 import { GameSprite2D } from "./GameSprite2D";
 import { GameTop2D } from "./GameTop2D";
+import { ViewModeSwitcher } from "./ViewModeSwitcher";
 import { checkIsBetaTester } from "@/lib/betaTesters";
 import {
   RECORD_MOVES_UPDATED_EVENT, getRecordMovesEnabled, getRecordedRun, saveRecordedRun,
@@ -197,7 +199,6 @@ export const PuzzleGame = () => {
   const playerUserId = playerSession?.user?.id ?? null;
   const playerEmail = playerSession?.user?.email ?? null;
   const isPrimaryLevelSkipAdmin = playerEmail?.trim().toLowerCase() === VIEW_SWITCHER_ADMIN_EMAIL;
-  const canUseViewSwitcher = isPrimaryLevelSkipAdmin;
   const playerUserIdRef = useRef<string | null>(playerUserId);
   useEffect(() => { playerUserIdRef.current = playerUserId; }, [playerUserId]);
 
@@ -362,6 +363,15 @@ export const PuzzleGame = () => {
     return "3d";
   });
   const [disabledViewModes, setDisabledViewModes] = useState<Set<ViewMode>>(() => new Set(getDisabledViewModes()));
+  useEffect(() => {
+    const refresh = () => setDisabledViewModes(new Set(getDisabledViewModes()));
+    window.addEventListener(DISABLED_VIEW_MODES_UPDATED_EVENT, refresh);
+    const unsubscribe = subscribeToDisabledViewModes();
+    return () => {
+      window.removeEventListener(DISABLED_VIEW_MODES_UPDATED_EVENT, refresh);
+      unsubscribe();
+    };
+  }, []);
 
   // useGameTimerSession is constructed before useGameEngine (the engine depends on the
   // session's timer refs/callbacks), so engine.isComplete can't be threaded in directly.
@@ -439,6 +449,13 @@ export const PuzzleGame = () => {
     renderGrid: engine.renderGrid, viewMode, isMobilePortrait, isMobile,
     onPushHudMessage: pushHudMessage,
   });
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    camera.setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
+    camera.setUserZoomTouched(false);
+    camera.setCameraOffset({ x: 0, z: 0 });
+  }, [camera]);
 
   const resetLevelTimer = useCallback((limitSeconds: number | undefined) => { session.resetLevelTimer(limitSeconds); }, [session]);
   const addLevelTimeSeconds = useCallback((deltaSeconds: number) => { session.addLevelTimeSeconds(deltaSeconds); }, [session]);
@@ -906,7 +923,7 @@ export const PuzzleGame = () => {
   }, [camera, isFullscreenMode]);
 
   const isCompact3DView = ENABLE_3D_GAMEPLAY_REDESIGN && viewMode === "3d";
-  const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite" || viewMode === "top" || isCompact3DView;
+  const useSplitHud = isMobile || isFullscreenMode || viewMode === "sprite" || viewMode === "top" || viewMode === "fps" || isCompact3DView;
   const desktopShellActive = !useSplitHud && !shouldRotateGate;
   const desktopTopInsetClass =
     leftShellPanelOpen && rightShellPanelOpen ? "xl:left-[22rem] xl:right-[22rem]" :
@@ -989,47 +1006,31 @@ export const PuzzleGame = () => {
   const secondaryHudButtons = (
     <>
       {campaignDialog}
-      <Button
-        onClick={() => { camera.setUserZoomTouched(true); camera.setCameraZoomIndex((i) => Math.max(camera.fitToWidthZoomIndex, i - 1)); }}
-        variant="ghost"
-        size="sm"
-        className="h-9 w-9 p-0 text-base hover:bg-primary/20"
-        title={`Zoom out (${camera.cameraZoomPercent}%)`}
-        disabled={!camera.canZoomOut}
-      >
-        −
-      </Button>
-      <Button
-        onClick={() => { camera.setUserZoomTouched(true); camera.setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1)); }}
-        variant="ghost"
-        size="sm"
-        className="h-9 w-9 p-0 text-base hover:bg-primary/20"
-        title={`Zoom in (${camera.cameraZoomPercent}%)`}
-        disabled={!camera.canZoomIn}
-      >
-        +
-      </Button>
-      {canUseViewSwitcher && (
-        <Button
-          onClick={() => {
-            setViewMode((prev) => {
-              const modes = ["3d", "fps", "2d", "sprite", "top"] as const;
-              const idx = modes.indexOf(prev);
-              const next = modes[(idx + 1) % modes.length];
-              return next;
-            });
-            camera.setCameraZoomIndex(DEFAULT_CAMERA_ZOOM_INDEX);
-            camera.setUserZoomTouched(false);
-            camera.setCameraOffset({ x: 0, z: 0 });
-          }}
-          variant="ghost"
-          size="sm"
-          className="h-9 px-3 text-xs font-bold tracking-wide hover:bg-primary/20"
-          title="Switch view mode"
-        >
-          {viewMode.toUpperCase()}
-        </Button>
+      {viewMode !== "fps" && (
+        <>
+          <Button
+            onClick={() => { camera.setUserZoomTouched(true); camera.setCameraZoomIndex((i) => Math.max(camera.fitToWidthZoomIndex, i - 1)); }}
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 text-base hover:bg-primary/20"
+            title={`Zoom out (${camera.cameraZoomPercent}%)`}
+            disabled={!camera.canZoomOut}
+          >
+            −
+          </Button>
+          <Button
+            onClick={() => { camera.setUserZoomTouched(true); camera.setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1)); }}
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 text-base hover:bg-primary/20"
+            title={`Zoom in (${camera.cameraZoomPercent}%)`}
+            disabled={!camera.canZoomIn}
+          >
+            +
+          </Button>
+        </>
       )}
+      <ViewModeSwitcher value={viewMode} onChange={handleViewModeChange} disabledModes={disabledViewModes} />
       <Button
         onClick={togglePause}
         variant="ghost"
@@ -1301,13 +1302,13 @@ export const PuzzleGame = () => {
                   </Button>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button onClick={() => camera.setCameraZoomIndex((i) => Math.max(camera.fitToWidthZoomIndex, i - 1))} variant="ghost" size="sm" className="h-8 w-8 p-0 text-white" disabled={!camera.canZoomOut}>−</Button>
-                  <Button onClick={() => camera.setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1))} variant="ghost" size="sm" className="h-8 w-8 p-0 text-white" disabled={!camera.canZoomIn}>+</Button>
-                  {canUseViewSwitcher && (
-                    <Button onClick={() => setViewMode((prev) => { const modes = ["3d", "fps", "2d", "sprite", "top"] as const; const idx = modes.indexOf(prev); return modes[(idx + 1) % modes.length]; })} variant="ghost" size="sm" className="h-8 px-2 text-[10px] font-black text-white">
-                      {viewMode.toUpperCase()}
-                    </Button>
+                  {viewMode !== "fps" && (
+                    <>
+                      <Button onClick={() => camera.setCameraZoomIndex((i) => Math.max(camera.fitToWidthZoomIndex, i - 1))} variant="ghost" size="sm" className="h-8 w-8 p-0 text-white" disabled={!camera.canZoomOut}>−</Button>
+                      <Button onClick={() => camera.setCameraZoomIndex((i) => Math.min(CAMERA_ZOOM_LEVELS.length - 1, i + 1))} variant="ghost" size="sm" className="h-8 w-8 p-0 text-white" disabled={!camera.canZoomIn}>+</Button>
+                    </>
                   )}
+                  <ViewModeSwitcher value={viewMode} onChange={handleViewModeChange} disabledModes={disabledViewModes} compact />
                 </div>
               </div>
             </div>
@@ -1485,6 +1486,45 @@ export const PuzzleGame = () => {
                   rotateUpright={isMobilePortrait}
                   idleArrowHintDirections={[]}
                   crumbleAnimations={engine.crumbleAnimations}
+                  onArrowClick={(x, y) => {
+                    if (engine.localPlayer?.isGliding) return;
+                    const cell = engine.renderGrid[y]?.[x];
+                    if (cell !== undefined && isArrowCell(cell)) {
+                      if (engine.localPlayerPos.x === x && engine.localPlayerPos.y === y) {
+                        pushHudMessage("Step off the arrow before selecting it.", 2200);
+                        return;
+                      }
+                      const isSameArrow = selectedArrow?.x === x && selectedArrow?.y === y;
+                      if (isSameArrow) {
+                        controls.enqueueInput({ type: "deselect" });
+                        setSelectedArrow(null);
+                        pushHudMessage("Arrow deselected");
+                      } else {
+                        controls.enqueueInput({ type: "select", x, y });
+                        pushHudMessage("Arrow selected — use the controls to move it.", 2200);
+                      }
+                    }
+                  }}
+                  onCancelSelection={() => {
+                    if (selectedArrow) {
+                      controls.enqueueInput({ type: "deselect" });
+                      setSelectedArrow(null);
+                      pushHudMessage("Arrow deselected");
+                    }
+                  }}
+                />
+              ) : viewMode === "fps" ? (
+                <GameFPS
+                  grid={engine.renderGrid}
+                  cavePos={engine.renderCavePos}
+                  selectedArrow={selectedArrow}
+                  selectorPos={controls.isSelectorActive && !selectedArrow ? controls.selectorPos : null}
+                  theme={currentLevel.theme}
+                  players={engine.renderPlayers}
+                  localPlayerId={engine.localPlayer?.id}
+                  rotateUpright={isMobilePortrait}
+                  crumbleAnimations={engine.crumbleAnimations}
+                  isMobile={isMobile}
                   onArrowClick={(x, y) => {
                     if (engine.localPlayer?.isGliding) return;
                     const cell = engine.renderGrid[y]?.[x];
