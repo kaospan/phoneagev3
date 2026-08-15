@@ -28,7 +28,7 @@ export const GameHudTop = forwardRef<HTMLDivElement, GameHudTopProps>(({
   onStartLevel,
 }, ref) => (
   <div ref={ref} className="absolute inset-x-0 top-0 z-50 flex items-start justify-between px-3 pt-3">
-    <div className="flex items-center gap-1 rounded-xl border border-white/15 bg-[#12130f]/88 px-2 py-1.5 shadow-xl backdrop-blur-md">
+    <div className="flex items-center gap-1 rounded-xl border border-[#5a3a24] bg-[#24150d] px-2 py-1.5 shadow-xl">
       <Button onClick={onPrevLevel} variant="ghost" size="sm" className="h-8 w-8 p-0 text-white font-bold">
         ←
       </Button>
@@ -37,7 +37,7 @@ export const GameHudTop = forwardRef<HTMLDivElement, GameHudTopProps>(({
         <span className="text-stone-400 font-medium">M:{moves}</span>
         {timeLeftText && (
           <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-black tabular-nums ${
-            isTimerUrgent ? 'border-red-300 bg-red-700 text-white animate-pulse' : 'border-white/20 bg-black/40 text-stone-200'
+            isTimerUrgent ? 'border-red-300 bg-red-700 text-white animate-pulse' : 'border-[#5a3a24] bg-[#160d08] text-stone-200'
           }`}>
             <TimerReset className="h-3 w-3 text-amber-200" />
             {timeLeftText}
